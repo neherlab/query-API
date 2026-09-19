@@ -1,6 +1,6 @@
 import type { RCmp, RNode } from '../lang/ast.js';
 import { operator } from '../lang/operators.js';
-import { coreField, type FieldDef, organismField, type Schema } from '../lang/schema.js';
+import { type FieldDef, organismField, type Schema, scopedField } from '../lang/schema.js';
 
 /**
  * The editable model behind the builder. The query *string* is derived from it, never the other
@@ -80,6 +80,8 @@ function filterText(node: FilterNode, schema: Schema, scope: string[]): string {
 
   const values = node.values.filter((v) => v !== '').map((v) => renderValue(v, def));
   if (values.length === 0) return '';
+  // A half-filled range is an incomplete filter, like an empty value: it contributes nothing.
+  if (opDef.arity !== undefined && values.length !== opDef.arity) return '';
   const arg = opDef.list ? `(${values.join(',')})` : values[0]!;
   return `${selector}${opDef.spell}${arg}`;
 }
@@ -90,12 +92,10 @@ function renderValue(value: string, def: FieldDef): string {
 }
 
 export function fieldDef(schema: Schema, family: string, scope: string[]): FieldDef | undefined {
-  const core = coreField(schema, family);
-  if (core) return core;
-  for (const organism of scope) {
-    const def = organismField(schema, organism, family);
-    if (def) return def;
-  }
+  const scoped = scopedField(schema, family, scope);
+  if (scoped) return scoped;
+  // Not usable here, but still shown so narrowing the organism does not silently drop a filter;
+  // resolution is what reports why (spec §7.2).
   for (const organism of schema.organisms) {
     const def = organismField(schema, organism.id, family);
     if (def) return def;

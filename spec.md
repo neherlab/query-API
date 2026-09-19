@@ -201,6 +201,12 @@ constraints in the AND-group containing *n*, intersected with those of enclosing
 type, and meaning — for every organism in `O`. Otherwise the query is invalid and the error names the
 term and the conflicting organisms.
 
+Slot candidates decide this, not slot names: a field is usable across `O` only where every slot has a
+candidate the whole scope shares. Segment names are shared across the influenza A subtypes, so
+`length.HA` resolves; references are declared per organism and are not shared, so no `nuc` or `aa`
+constraint resolves until `O` is a single organism. A builder must therefore offer a field only when
+every slot has a shared candidate, and offer each slot only the shared ones.
+
 ```
 host=='duck';collectionDate=ge=2024                   valid — core fields only, all organisms
 organism=descendantOf=influenzaA;length.HA=ge=1600    valid — HA resolves identically across influenza A
@@ -208,6 +214,7 @@ organism==sars2;nuc.23403=='G'                        valid — scope pinned to 
 nuc.23403=='G';organism==sars2                        valid — order is irrelevant
 organism==sars2;nuc.23403=='G' , organism==h5n1;nuc.1234=='A'
                                                       valid — each OR branch scopes independently
+organism=descendantOf=influenzaA;nuc.HA.1234=='A'     invalid — the subtypes share no reference
 nuc.23403=='G'                                        invalid — nuc does not resolve identically across all organisms
 ```
 
@@ -305,6 +312,10 @@ A partial date in the query denotes an interval; ordered comparators take the re
 | `date=le=2021-03` | `d <= 2021-03-31` |
 | `date=lt=2021-03` | `d < 2021-03-01` |
 | `date==2021-03` | `d` within March 2021 |
+| `date=inRange=(2021-03,2021-06)` | `d >= 2021-03-01` and `d <= 2021-06-30` |
+
+Each bound of `=inRange=` takes the edge that widens the interval, so `=inRange=(2021-03,2021-03)`
+is `==2021-03`. Bounds in the wrong order are a resolution error, not an empty result.
 
 ### 9.3 Connectives
 
@@ -338,10 +349,16 @@ grammar feature.
 |---|---|---|
 | `==` `!=` | all | Equality; `*` wildcard on `string` |
 | `=gt=` `=ge=` `=lt=` `=le=` | `integer`, `number`, `date` | Ordered comparison, lifted per §9.1 |
+| `=inRange=` | `integer`, `number`, `date` | Closed interval: `x=inRange=(a,b)` ≡ `x=ge=a;x=le=b`. Exactly two values, low first |
 | `=in=` `=out=` | all | Membership in a value list |
 | `=descendantOf=` | `hierarchical` | **Inclusive**: the named node and everything below it |
 | `=isNull=` | all | `true`/`false` — the only way to select on missing data |
 | `=isAmbiguous=` | `sequenceState`, `date` | `true`/`false` — candidate set has more than one member |
+
+*Rejected — interval notation for bounds.* `[a,b)` is unavailable: `[` and `]` are outside the
+URL-safe set (§4), and a leading `(` already opens a value list (§5.1). `=inRange=` is therefore
+closed on both sides; a half-open range is the explicit pair, `length.HA=ge=1600;length.HA=lt=1700`.
+On `integer` the distinction is vacuous, and on `date` granularity supplies it (§9.2).
 
 ### 10.1 Hierarchical fields
 

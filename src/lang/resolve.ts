@@ -1,4 +1,5 @@
 import type { RCmp, RNode, RValue, UNode, USelector, UValue } from './ast.js';
+import { interval } from './dates.js';
 import type { Diagnostic, Span } from './errors.js';
 import { allowedOperators, operator, OPERATORS, type OperatorDef } from './operators.js';
 import {
@@ -245,12 +246,29 @@ function resolveCmp(node: UNode & { kind: 'cmp' }, scope: string[], ctx: Ctx): R
   if (!opDef.list && node.values.length > 1) {
     return error(ctx, `${opDef.spell} takes a single value`, node.span, `use ${def.family}=in=(...) for several`);
   }
+  if (opDef.arity !== undefined && node.values.length !== opDef.arity) {
+    return error(
+      ctx,
+      `${opDef.spell} takes exactly ${opDef.arity} values`,
+      node.span,
+      `write ${def.family}${opDef.spell}(low,high)`,
+    );
+  }
 
   const values: RValue[] = [];
   for (const raw of node.values) {
     const value = checkValue(def, opDef, raw, ctx);
     if (value === null) return null;
     values.push(value);
+  }
+
+  if (opDef.name === 'inRange' && emptyRange(values, def.type)) {
+    return error(
+      ctx,
+      'the lower bound is above the upper bound, so the range is empty',
+      node.span,
+      `write ${def.family}=inRange=(${String(values[1])},${String(values[0])}) for that span`,
+    );
   }
 
   return {
@@ -459,6 +477,14 @@ function checkValue(def: FieldDef, opDef: OperatorDef, raw: UValue, ctx: Ctx): R
     default:
       return text;
   }
+}
+
+/** `=inRange=` is the closed interval `a =le= x =le= b`, so bounds in the wrong order match nothing. */
+function emptyRange(values: RValue[], type: FieldDef['type']): boolean {
+  const [low, high] = values;
+  if (low === undefined || high === undefined) return false;
+  if (type === 'date') return interval(String(low))[0] > interval(String(high))[1];
+  return Number(low) > Number(high);
 }
 
 function validDate(text: string): boolean {

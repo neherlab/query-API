@@ -18,6 +18,13 @@ describe('class A — one request', () => {
     expect(out.requests[0]!.body).toEqual({ host: 'duck', collectionDateFrom: '2024' });
   });
 
+  it('maps a range onto From and To in one body', () => {
+    const out = lapis('collectionDate=inRange=(2021-01,2021-03)', 'sars2');
+    expect(out.klass).toBe('A');
+    expect(out.requests).toHaveLength(1);
+    expect(out.requests[0]!.body).toEqual({ collectionDateFrom: '2021-01', collectionDateTo: '2021-03' });
+  });
+
   it('puts a single conjunction of mutations in the dedicated arrays', () => {
     const out = lapis("nuc.23403=='G';aa.S.501=='Y'", 'sars2');
     expect(out.klass).toBe('A');
@@ -32,6 +39,17 @@ describe('class B — the OR collapses into a value list', () => {
     expect(out.klass).toBe('B');
     expect(out.requests).toHaveLength(1);
     expect(out.requests[0]!.body).toEqual({ host: 'duck', country: ['France', 'Germany'] });
+  });
+});
+
+describe('class B — the OR collapses into a value list, but only for equalities', () => {
+  it('will not merge bounds into a value list, since that would change the meaning', () => {
+    const out = lapis('collectionDate=ge=2020,collectionDate=ge=2021', 'sars2');
+    expect(out.klass).toBe('D');
+    expect(out.requests.map((r) => r.body)).toEqual([
+      { collectionDateFrom: '2020' },
+      { collectionDateFrom: '2021' },
+    ]);
   });
 });
 

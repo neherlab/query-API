@@ -1,5 +1,8 @@
 import type { RCmp, RNode, RValue } from './ast.js';
+import { interval } from './dates.js';
 import { coreField, isDescendantOf, organismField, type Schema } from './schema.js';
+
+export { interval };
 
 /**
  * Reference implementation of the semantics in spec §9. The app has no sequence data, so this is
@@ -105,17 +108,6 @@ function candidates(cmp: RCmp, stored: string): string[] {
   return [stored];
 }
 
-/** Partial dates denote an interval, in the stored value and in the query alike (spec §9.1, §9.2). */
-export function interval(text: string): [string, string] {
-  const [y, m, d] = text.split('-');
-  if (d !== undefined) return [text, text];
-  if (m !== undefined) {
-    const last = new Date(Date.UTC(Number(y), Number(m), 0)).getUTCDate();
-    return [`${y}-${m}-01`, `${y}-${m}-${String(last).padStart(2, '0')}`];
-  }
-  return [`${y}-01-01`, `${y}-12-31`];
-}
-
 function dateTruth(cmp: RCmp, stored: string): Truth {
   const [lo, hi] = interval(stored);
   const query = String(cmp.values[0]);
@@ -136,6 +128,15 @@ function dateTruth(cmp: RCmp, stored: string): Truth {
       return hi <= qhi ? 'true' : lo > qhi ? 'false' : 'maybe';
     case 'lt':
       return hi < qlo ? 'true' : lo >= qlo ? 'false' : 'maybe';
+    case 'inRange': {
+      // Closed interval: the lower bound takes its own lower edge, the upper bound its upper one,
+      // so a range of two partial dates spans from the first to the end of the second (§9.2).
+      const from = interval(String(cmp.values[0]))[0];
+      const to = interval(String(cmp.values[1]))[1];
+      if (lo >= from && hi <= to) return 'true';
+      if (hi < from || lo > to) return 'false';
+      return 'maybe';
+    }
     case 'in':
       return anyOf(cmp, (value) => dateTruth({ ...cmp, op: 'eq', values: [value] }, stored));
     case 'out':
@@ -203,6 +204,8 @@ function compareTruth(cmp: RCmp, stored: number): Truth {
       return bool(stored > value);
     case 'ge':
       return bool(stored >= value);
+    case 'inRange':
+      return bool(stored >= Number(cmp.values[0]) && stored <= Number(cmp.values[1]));
     case 'in':
       return bool(cmp.values.map(Number).includes(stored));
     case 'out':

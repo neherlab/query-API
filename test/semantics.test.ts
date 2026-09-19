@@ -37,6 +37,42 @@ describe('the lift: partial dates (§9.1)', () => {
   });
 });
 
+describe('=inRange= is the closed interval (§10)', () => {
+  it('lifts like the pair of bounds it stands for', () => {
+    expect(truth('collectionDate=inRange=(2021-01,2021-06)', marchRecord)).toBe('true');
+    expect(truth('collectionDate=inRange=(2021-03-15,2021-06)', marchRecord)).toBe('maybe');
+    expect(truth('collectionDate=inRange=(2021-04,2021-06)', marchRecord)).toBe('false');
+  });
+
+  it('agrees with the explicit conjunction, for every outcome', () => {
+    for (const [range, pair] of [
+      ['(2021-01,2021-06)', 'collectionDate=ge=2021-01;collectionDate=le=2021-06'],
+      ['(2021-03-15,2021-06)', 'collectionDate=ge=2021-03-15;collectionDate=le=2021-06'],
+      ['(2021-04,2021-06)', 'collectionDate=ge=2021-04;collectionDate=le=2021-06'],
+    ]) {
+      expect(truth(`collectionDate=inRange=${range}`, marchRecord), range).toBe(truth(pair!, marchRecord));
+    }
+  });
+
+  it('is equality when both bounds are the same partial date (§9.2)', () => {
+    expect(truth('collectionDate=inRange=(2021-03,2021-03)', marchRecord)).toBe(
+      truth('collectionDate==2021-03', marchRecord),
+    );
+  });
+
+  it('is inclusive on both ends for numbers', () => {
+    const length = (value: number): TestRecord => ({ organism: 'h3n2', values: { 'length.HA': value } });
+    expect(truth('length.HA=inRange=(1600,1700)', length(1600), 'h3n2')).toBe('true');
+    expect(truth('length.HA=inRange=(1600,1700)', length(1700), 'h3n2')).toBe('true');
+    expect(truth('length.HA=inRange=(1600,1700)', length(1599), 'h3n2')).toBe('false');
+  });
+
+  it('is maybe for a missing value, like any other comparison (§9.1)', () => {
+    const noDate: TestRecord = { organism: 'sars2', values: {} };
+    expect(truth('collectionDate=inRange=(2021-01,2021-06)', noDate)).toBe('maybe');
+  });
+});
+
 describe('the lift: ambiguity codes and missing values (§9.1)', () => {
   const at = (state: string): TestRecord => ({
     organism: 'sars2',

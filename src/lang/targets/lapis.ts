@@ -146,6 +146,11 @@ function mergeSingleField(metadata: Term[][]): Term[] | null {
   if (varying.size !== 1) return null;
 
   const key = [...varying][0]!;
+  // Only equality-shaped terms fold into LAPIS's within-field OR. Bounds and ranges would change
+  // meaning if their values were merged into a list, so they fall through to class D instead.
+  const foldable = (term: Term) => term.cmp.op === 'eq' || term.cmp.op === 'in';
+  if (metadata.some((d) => d.some((t) => fieldKey(t) === key && !foldable(t)))) return null;
+
   return head.map((term) => {
     if (fieldKey(term) !== key) return term;
     const values = metadata.flatMap((d) => d.filter((t) => fieldKey(t) === key).flatMap((t) => t.cmp.values));
@@ -194,6 +199,10 @@ function buildBody(plan: Plan, warnings: string[]): Record<string, unknown> {
         break;
       case 'le':
         body[`${field}To`] = cmp.values[0];
+        break;
+      case 'inRange':
+        body[`${field}From`] = cmp.values[0];
+        body[`${field}To`] = cmp.values[1];
         break;
       case 'gt':
         body[`${field}From`] = cmp.values[0];

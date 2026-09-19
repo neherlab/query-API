@@ -97,20 +97,64 @@ export function allFamilies(schema: Schema): string[] {
   return [...names].sort();
 }
 
-/** Families usable across an entire scope: core fields, plus organism fields present in all of them. */
+/** Families usable across an entire scope: core fields, plus organism fields usable in all of them. */
 export function familiesInScope(schema: Schema, scope: string[]): FieldDef[] {
   const out = schema.coreFields.slice();
   if (scope.length === 0) return out;
   const first = schema.organisms.find((o) => o.id === scope[0]);
   if (!first) return out;
   for (const field of first.fields) {
-    const everywhere = scope.every((id) => {
-      const other = organismField(schema, id, field.family);
-      return other !== undefined && sameShape(field, other);
-    });
-    if (everywhere) out.push(field);
+    const scoped = scopedField(schema, field.family, scope);
+    if (scoped) out.push(scoped);
   }
   return out;
+}
+
+/**
+ * A field as it can be used across a whole scope, with each slot narrowed to the candidates the
+ * scope shares — or undefined when no constraint on it could resolve identically (spec §7.2).
+ *
+ * Matching slot names are not enough: a genome field needs a reference, and references are declared
+ * per organism, so `nuc` drops out of a multi-subtype scope even though every subtype has it. A
+ * segment slot whose values merely differ survives on the intersection, since `length.HA` resolves
+ * identically wherever HA exists.
+ */
+export function scopedField(schema: Schema, family: string, scope: string[]): FieldDef | undefined {
+  const core = coreField(schema, family);
+  if (core) return core;
+  if (scope.length === 0) return undefined;
+
+  const defs: FieldDef[] = [];
+  for (const id of scope) {
+    const def = organismField(schema, id, family);
+    if (!def) return undefined;
+    defs.push(def);
+  }
+  const head = defs[0]!;
+  if (!defs.every((def) => sameShape(head, def))) return undefined;
+  if (!head.slots) return head;
+
+  const slots: SlotDef[] = [];
+  for (const [i, slot] of head.slots.entries()) {
+    const candidates = defs.map((def) => def.slots![i]!.values);
+    if (slot.kind === 'pos' || candidates.some((values) => values === undefined)) {
+      slots.push(slot);
+      continue;
+    }
+    const shared = candidates[0]!.filter((value) => candidates.every((values) => values!.includes(value)));
+    if (shared.length === 0) return undefined;
+    const next: SlotDef = { name: slot.name, kind: slot.kind, values: shared };
+    // A default only survives if every organism declares the same one, and it is still a candidate.
+    if (
+      slot.default !== undefined &&
+      shared.includes(slot.default) &&
+      defs.every((def) => def.slots![i]!.default === slot.default)
+    ) {
+      next.default = slot.default;
+    }
+    slots.push(next);
+  }
+  return { ...head, slots };
 }
 
 /** Whether two definitions of the same family agree well enough to be used across a scope (§7.2). */

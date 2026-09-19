@@ -56,9 +56,11 @@ function genomeFields({ refs, refDefault, segments, cds }: GenomeShape): FieldDe
     {
       family: 'nucMutationCount',
       type: 'integer',
-      label: 'nucleotide mutations',
+      label: 'nucleotide mutation count',
       slots: segOnly,
-      description: 'Derived field (spec §10.3): mutations relative to the reference.',
+      description:
+        'Derived field (spec §10.3): how many positions differ from the reference, per sequence. ' +
+        'To filter on a position, use the nucleotide field.',
     },
     {
       family: 'nuc',

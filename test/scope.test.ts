@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { compile, familiesInScope, type Schema } from '../src/lang/index.js';
+import { compile, familiesInScope, type FieldDef, type Schema, scopedField } from '../src/lang/index.js';
 import { demoSchema } from '../src/schema/demo.js';
 
 /** Spec §7.2 and §8.2. */
 
 function run(input: string, organism: string | null = null) {
   return compile(input, { schema: demoSchema, pinned: organism });
+}
+
+function segmentField(segments: string[]): FieldDef {
+  return { family: 'length', type: 'integer', slots: [{ name: 'seg', kind: 'seg', values: segments }] };
 }
 
 describe('available fields follow the scope (§7.1)', () => {
@@ -26,9 +30,42 @@ describe('available fields follow the scope (§7.1)', () => {
   it('offers fields that resolve identically across a taxon subtree', () => {
     const families = familiesInScope(demoSchema, ['h5n1', 'h3n2', 'h1n1pdm']).map((f) => f.family);
     expect(families).toContain('length'); // same segment slot for all three
-    expect(families).toContain('nuc');
+    expect(families).toContain('coverage');
+    expect(families).toContain('nucMutationCount');
     expect(families).not.toContain('pangoLineage'); // SARS-CoV-2 only
     expect(families).not.toContain('cladeH5'); // H5N1 only
+  });
+
+  it('withholds genotype fields across a subtree: references are declared per organism', () => {
+    const families = familiesInScope(demoSchema, ['h5n1', 'h3n2', 'h1n1pdm']).map((f) => f.family);
+    for (const family of ['nuc', 'aa', 'nuc_ins', 'aa_ins']) expect(families).not.toContain(family);
+  });
+
+  it('agrees with the resolver: nothing offered is unusable, nothing withheld is usable', () => {
+    // The subtypes share segment names but no reference, so no spelling of a genotype filter
+    // resolves — which is exactly why the field is not offered.
+    expect(run('organism=descendantOf=influenzaA;length.HA=ge=1600').ok).toBe(true);
+    expect(run("organism=descendantOf=influenzaA;nuc.HA.1234=='A'").ok).toBe(false);
+    expect(run("organism=descendantOf=influenzaA;nuc(ref=darwin2021,seg=HA,pos=1234)=='A'").ok).toBe(false);
+    expect(run("organism=descendantOf=influenzaA;aa.HA.156=='H'").ok).toBe(false);
+    // Two organisms, one reference each, no overlap — same rule, shallower tree.
+    expect(run('organism=descendantOf=rsv;nuc.100==A').ok).toBe(false);
+    expect(familiesInScope(demoSchema, ['rsvA', 'rsvB']).map((f) => f.family)).not.toContain('nuc');
+  });
+
+  it('narrows a shared slot to the candidates the whole scope has, rather than dropping the field', () => {
+    const partial: Schema = {
+      ...demoSchema,
+      organisms: [
+        { id: 'a', label: 'a', fields: [segmentField(['HA', 'NA'])] },
+        { id: 'b', label: 'b', fields: [segmentField(['HA', 'PB1'])] },
+      ],
+      organismTaxonomy: [{ id: 'both', children: [{ id: 'a' }, { id: 'b' }] }],
+    };
+    const length = scopedField(partial, 'length', ['a', 'b']);
+    expect(length?.slots?.[0]!.values).toEqual(['HA']);
+    expect(compile('length.HA=ge=1000', { schema: partial, pinned: null }).ok).toBe(true);
+    expect(compile('length.NA=ge=1000', { schema: partial, pinned: null }).ok).toBe(false);
   });
 
   it('offers nothing organism-specific across a mixed scope', () => {

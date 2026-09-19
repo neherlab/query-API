@@ -230,6 +230,50 @@
       "error": { "phase": "parse", "message": "expected a comparator, found end of query", "start": 7, "end": 7 }
     },
     {
+      "name": "a closed date range",
+      "input": "collectionDate=inRange=(2021-01,2021-03)",
+      "organism": null,
+      "strict": "collectionDate=inRange=('2021-01','2021-03')",
+      "minimal": "collectionDate=inRange=(2021-01,2021-03)",
+      "readable": "collectionDate=inRange=(2021-01,2021-03)",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "a range of one partial date is equality on that month (§9.2)",
+      "input": "collectionDate=inRange=(2021-03,2021-03)",
+      "organism": null,
+      "strict": "collectionDate=inRange=('2021-03','2021-03')",
+      "minimal": "collectionDate=inRange=(2021-03,2021-03)",
+      "readable": "collectionDate=inRange=(2021-03,2021-03)",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "a length range on a segment",
+      "input": "length.HA=inRange=(1600,1700)",
+      "organism": "h3n2",
+      "strict": "organism=='h3n2';length.HA=inRange=('1600','1700')",
+      "minimal": "length.HA=inRange=(1600,1700)",
+      "readable": "length.HA=inRange=(1600,1700)",
+      "scope": ["h3n2"]
+    },
+    {
+      "name": "a range needs exactly two bounds",
+      "input": "length.HA=inRange=1600",
+      "organism": "h3n2",
+      "error": { "phase": "resolve", "message": "=inRange= takes exactly 2 values", "start": 0, "end": 22 }
+    },
+    {
+      "name": "bounds in the wrong order are an error, not an empty result",
+      "input": "length.HA=inRange=(1700,1600)",
+      "organism": "h3n2",
+      "error": {
+        "phase": "resolve",
+        "message": "the lower bound is above the upper bound, so the range is empty",
+        "start": 0,
+        "end": 28
+      }
+    },
+    {
       "name": "an operator that does not apply to the type",
       "input": "country=ge=France",
       "organism": null,

@@ -61,6 +61,9 @@ export class App {
 
     this.result = compile('', { schema: this.schema, pinned: this.pinned });
     if (options.initialQuery) this.applyText(options.initialQuery, false);
+    // Open on a filled-in filter row rather than an empty shell: an incomplete filter renders as
+    // the empty string (model.ts filterText), so the query stays empty until a value is typed.
+    if (this.root.children.length === 0) this.root.children.push(this.newFilter());
     this.render();
   }
 
@@ -112,29 +115,33 @@ export class App {
   }
 
   private header(): HTMLElement {
+    return h(
+      'header',
+      { class: 'app-header' },
+      h('div', { class: 'title' }, h('h1', { text: 'Sequence query builder' }), h('span', { class: 'version', text: `language ${this.result.json.languageVersion}` })),
+      h('span', {
+        class: 'schema-origin',
+        text: this.options.source.error
+          ? `${this.options.source.error} — using the demo schema`
+          : `schema: ${this.options.source.origin}`,
+      }),
+    );
+  }
+
+  /** Sits with the scope it determines, directly above the filters it governs. */
+  private organismContext(): HTMLElement {
     const organisms = [
       { value: '', label: 'all organisms' },
       ...this.schema.organisms.map((o) => ({ value: o.id, label: o.label })),
     ];
     return h(
-      'header',
-      { class: 'app-header' },
-      h('div', { class: 'title' }, h('h1', { text: 'Sequence query builder' }), h('span', { class: 'version', text: `language ${this.result.json.languageVersion}` })),
-      h(
-        'div',
-        { class: 'context' },
-        h('label', { text: 'Organism context' }),
-        select(organisms, this.pinned ?? '', (value) => {
-          this.pinned = value === '' ? null : value;
-          this.syncFromModel();
-        }),
-        h('span', {
-          class: 'schema-origin',
-          text: this.options.source.error
-            ? `${this.options.source.error} — using the demo schema`
-            : `schema: ${this.options.source.origin}`,
-        }),
-      ),
+      'div',
+      { class: 'context' },
+      h('label', { text: 'Organism context' }),
+      select(organisms, this.pinned ?? '', (value) => {
+        this.pinned = value === '' ? null : value;
+        this.syncFromModel();
+      }),
     );
   }
 
@@ -143,6 +150,7 @@ export class App {
       'section',
       { class: 'panel builder' },
       h('h2', { text: 'Filters' }),
+      this.organismContext(),
       this.scopeIndicator(),
       this.groupView(this.root, true),
       h('div', { class: 'query-editor' },
@@ -195,13 +203,21 @@ export class App {
         { class: 'op-select' },
       ),
       this.matchModeSelect(group),
-      h('button', { class: 'ghost', text: '+ filter', onclick: () => this.addFilter(group) }),
-      h('button', { class: 'ghost', text: '+ group', onclick: () => this.addGroup(group) }),
-      !isRoot && h('button', { class: 'ghost danger', text: 'remove', onclick: () => this.removeNode(group.id) }),
+      h('button', { class: 'ghost add-filter', text: '+ filter', onclick: () => this.addFilter(group) }),
+      !isRoot &&
+        h('button', { class: 'ghost danger remove', text: 'remove', onclick: () => this.removeNode(group.id) }),
     );
 
     const children = group.children.map((child) =>
       child.kind === 'group' ? this.groupView(child, false) : this.filterView(child),
+    );
+
+    // '+ filter' belongs to the group; '+ group' sits one level above the box it creates, so it
+    // trails the children rather than sharing the header.
+    const footer = h(
+      'div',
+      { class: 'row group-footer' },
+      h('button', { class: 'ghost add-group', text: '+ group', onclick: () => this.addGroup(group) }),
     );
 
     return h(
@@ -211,6 +227,7 @@ export class App {
       children.length
         ? h('div', { class: 'children' }, ...children)
         : h('p', { class: 'empty', text: 'No filters yet.' }),
+      footer,
     );
   }
 
@@ -223,7 +240,9 @@ export class App {
 
     if (!def) {
       row.append(h('span', { class: 'error-inline', text: `unknown field '${filter.family}'` }));
-      row.append(h('button', { class: 'ghost danger', text: '×', onclick: () => this.removeNode(filter.id) }));
+      row.append(
+        h('button', { class: 'ghost danger remove', text: '×', onclick: () => this.removeNode(filter.id) }),
+      );
       return row;
     }
 
@@ -238,15 +257,23 @@ export class App {
           filter.op = value;
           const opDef = operator(value);
           if (opDef?.booleanArg && !['true', 'false'].includes(filter.values[0] ?? '')) filter.values = ['true'];
+          else if (opDef?.arity === 2) filter.values = [filter.values[0] ?? '', filter.values[1] ?? ''];
+          else if (!opDef?.list && filter.values.length > 1) filter.values = [filter.values[0] ?? ''];
           this.syncFromModel();
         },
         { class: 'op-select' },
       ),
       this.valueInput(filter, def),
-      h('button', { class: 'ghost danger', text: '×', title: 'remove', onclick: () => this.removeNode(filter.id) }),
+      h('button', {
+        class: 'ghost danger remove',
+        text: '×',
+        title: 'remove',
+        onclick: () => this.removeNode(filter.id),
+      }),
     );
 
-    if (def.description) row.append(h('span', { class: 'hint', text: def.description }));
+    // The field description is a tooltip, not a second line — the row has to stay one line high.
+    if (def.description) row.title = def.description;
     return row;
   }
 
@@ -341,6 +368,28 @@ export class App {
       );
     }
 
+    // A range is one row with two bounds, not two rows the user has to know to pair (§10).
+    if (opDef?.arity === 2) {
+      const bound = (index: number, placeholder: string): HTMLInputElement =>
+        h('input', {
+          class: 'value-input bound',
+          type: 'text',
+          value: filter.values[index] ?? '',
+          placeholder,
+          title: `${placeholder} — ${placeholderFor(def, false)}, inclusive`,
+          spellcheck: 'false',
+        });
+      const low = bound(0, 'from');
+      const high = bound(1, 'to');
+      const update = () => {
+        filter.values = [low.value.trim(), high.value.trim()];
+        this.syncFromModel();
+      };
+      low.addEventListener('change', update);
+      high.addEventListener('change', update);
+      return h('span', { class: 'range-input' }, low, h('span', { class: 'range-sep', text: '–' }), high);
+    }
+
     if (def.type === 'enum' && !opDef?.list) {
       return select(
         [{ value: '', label: '—' }, ...(def.values ?? []).map((v) => ({ value: v, label: v }))],
@@ -414,7 +463,11 @@ export class App {
     const panel = h('section', { class: 'panel output' }, h('h2', { text: 'Output' }));
 
     if (!result.ok) {
-      panel.append(h('p', { class: 'empty', text: 'Fix the errors above to see the canonical strings.' }));
+      const text =
+        this.text.trim() === ''
+          ? 'Fill in a filter to see the canonical strings.'
+          : 'Fix the errors above to see the canonical strings.';
+      panel.append(h('p', { class: 'empty', text }));
       return panel;
     }
 
@@ -483,11 +536,9 @@ export class App {
 
   /* ------------------------------- mutations ------------------------------- */
 
-  private addFilter(group: GroupNode): void {
-    const scope = this.scope();
-    const available = familiesInScope(this.schema, scope);
-    const def = available[0];
-    group.children.push({
+  private newFilter(): FilterNode {
+    const def = familiesInScope(this.schema, this.scope())[0];
+    return {
       id: nextId(),
       kind: 'filter',
       wrappers: [],
@@ -495,12 +546,18 @@ export class App {
       slots: defaultSlots(def),
       op: def ? (allowedOperators(def)[0]?.name ?? 'eq') : 'eq',
       values: [''],
-    });
+    };
+  }
+
+  private addFilter(group: GroupNode): void {
+    group.children.push(this.newFilter());
     this.syncFromModel();
   }
 
   private addGroup(group: GroupNode): void {
-    group.children.push(emptyGroup(group.op === 'and' ? 'or' : 'and'));
+    const child = emptyGroup(group.op === 'and' ? 'or' : 'and');
+    child.children.push(this.newFilter());
+    group.children.push(child);
     this.syncFromModel();
   }
 

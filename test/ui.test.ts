@@ -32,17 +32,67 @@ describe('the app mounts and builds', () => {
     expect(container.querySelector('.scope-note')?.textContent).toMatch(/core fields only/);
   });
 
-  it('adds a filter row when asked', () => {
+  it('offers one filter row up front, with no value so the query stays empty', () => {
     const container = mount();
-    expect(container.querySelectorAll('.filter')).toHaveLength(0);
-    button(container, '+ filter').click();
-    expect(document.querySelectorAll('.filter')).toHaveLength(1);
+    expect(container.querySelectorAll('.filter')).toHaveLength(1);
+    expect(container.querySelector('.filter .field-select')).not.toBeNull();
+    expect(container.querySelectorAll('.diagnostic')).toHaveLength(0);
+    expect(container.querySelector('.output .empty')?.textContent).toMatch(/Fill in a filter/);
   });
 
-  it('adds a nested group', () => {
+  it('adds a filter row when asked', () => {
+    const container = mount();
+    button(container, '+ filter').click();
+    expect(document.querySelectorAll('.filter')).toHaveLength(2);
+  });
+
+  it('adds a nested group, itself carrying a filter row', () => {
     const container = mount();
     button(container, '+ group').click();
     expect(document.querySelectorAll('.group')).toHaveLength(2); // root plus the new one
+    expect(document.querySelectorAll('.group:not(.root) .filter')).toHaveLength(1);
+  });
+});
+
+describe('the field list follows the scope', () => {
+  function families(container: HTMLElement): string[] {
+    return [...container.querySelectorAll<HTMLOptionElement>('.field-select option')].map((o) => o.value);
+  }
+
+  it('offers no genotype field across a multi-organism scope', () => {
+    const container = mount('organism=descendantOf=influenzaA;length.HA=ge=1600');
+    expect(chips(container)).toEqual(['h5n1', 'h3n2', 'h1n1pdm']);
+    expect(families(container)).toContain('length');
+    for (const family of ['nuc', 'aa', 'nuc_ins', 'aa_ins']) {
+      expect(families(container), family).not.toContain(family);
+    }
+  });
+
+  it('offers them again once one organism is pinned', () => {
+    const container = mount('organism==h3n2;length.HA=ge=1600');
+    expect(families(container)).toContain('nuc');
+    expect(families(container)).toContain('aa');
+  });
+});
+
+describe('range filters are one row with two bounds', () => {
+  it('shows a from/to pair and writes both into the query', () => {
+    const container = mount('length.HA=inRange=(1600,1700)', 'h3n2');
+    const bounds = [...container.querySelectorAll<HTMLInputElement>('.range-input .value-input')];
+    expect(bounds.map((b) => b.value)).toEqual(['1600', '1700']);
+
+    bounds[1]!.value = '1650';
+    bounds[1]!.dispatchEvent(new Event('change'));
+    expect(document.querySelector('.string-value')?.textContent).toBe('length.HA=inRange=(1600,1650)');
+  });
+
+  it('treats a half-filled range as an incomplete filter, not an error', () => {
+    const container = mount('length.HA=inRange=(1600,1700)', 'h3n2');
+    const bounds = [...container.querySelectorAll<HTMLInputElement>('.range-input .value-input')];
+    bounds[1]!.value = '';
+    bounds[1]!.dispatchEvent(new Event('change'));
+    expect(document.querySelectorAll('.diagnostic')).toHaveLength(0);
+    expect(document.querySelector('.output .empty')?.textContent).toMatch(/Fill in a filter/);
   });
 });
 

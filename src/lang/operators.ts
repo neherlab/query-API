@@ -8,6 +8,8 @@ export interface OperatorDef {
   alias?: string;
   /** Takes a parenthesized value list. */
   list?: boolean;
+  /** Exact number of values, for list operators that take a fixed count. */
+  arity?: number;
   /** Takes exactly `true` or `false`, whatever the field type. */
   booleanArg?: boolean;
   /** Field types this applies to; '*' for all. */
@@ -27,6 +29,14 @@ export const OPERATORS: Record<string, OperatorDef> = {
   le: { name: 'le', spell: '=le=', alias: '<=', types: ['integer', 'number', 'date'], label: 'is at most' },
   gt: { name: 'gt', spell: '=gt=', alias: '>', types: ['integer', 'number', 'date'], label: 'is after / greater than' },
   ge: { name: 'ge', spell: '=ge=', alias: '>=', types: ['integer', 'number', 'date'], label: 'is at least' },
+  inRange: {
+    name: 'inRange',
+    spell: '=inRange=',
+    list: true,
+    arity: 2,
+    types: ['integer', 'number', 'date'],
+    label: 'is between',
+  },
   in: { name: 'in', spell: '=in=', list: true, types: '*', label: 'is one of' },
   out: { name: 'out', spell: '=out=', list: true, types: '*', label: 'is none of' },
   descendantOf: {
