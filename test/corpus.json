@@ -1,0 +1,261 @@
+{
+  "$comment": "Conformance corpus (spec §14.3). Each case pins the observable behaviour of one input: the canonical renderings, the derived scope, and — for invalid input — the phase, message and character offsets of the first diagnostic. A second implementation of the language should reproduce this file exactly.",
+  "languageVersion": "0.2",
+  "schema": "demo-1",
+  "cases": [
+    {
+      "name": "core fields only, every organism in scope",
+      "input": "host=='duck';collectionDate=ge=2024",
+      "organism": null,
+      "strict": "host=='duck';collectionDate=ge='2024'",
+      "minimal": "host==duck;collectionDate=ge=2024",
+      "readable": "host==duck;collectionDate>=2024",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "organism pinned in the string",
+      "input": "organism==h5n1;nuc.HA.1234=='A'",
+      "organism": null,
+      "strict": "organism=='h5n1';nuc.clade2344b.HA.1234=='A'",
+      "minimal": "organism==h5n1;nuc.HA.1234==A",
+      "readable": "organism==h5n1;nuc.HA.1234==A",
+      "scope": ["h5n1"]
+    },
+    {
+      "name": "organism pinned by context, strict makes it explicit",
+      "input": "nuc.HA.1234=='A'",
+      "organism": "h5n1",
+      "strict": "organism=='h5n1';nuc.clade2344b.HA.1234=='A'",
+      "minimal": "nuc.HA.1234==A",
+      "readable": "nuc.HA.1234==A",
+      "scope": ["h5n1"]
+    },
+    {
+      "name": "conjunct order is irrelevant to scope",
+      "input": "nuc.HA.1234=='A';organism==h5n1",
+      "organism": null,
+      "strict": "nuc.clade2344b.HA.1234=='A';organism=='h5n1'",
+      "minimal": "nuc.HA.1234==A;organism==h5n1",
+      "readable": "nuc.HA.1234==A;organism==h5n1",
+      "scope": ["h5n1"]
+    },
+    {
+      "name": "a segment field across a taxon subtree",
+      "input": "organism=descendantOf=influenzaA;length.HA=ge=1600",
+      "organism": null,
+      "strict": "organism=descendantOf='influenzaA';length.HA=ge='1600'",
+      "minimal": "organism=descendantOf=influenzaA;length.HA=ge=1600",
+      "readable": "organism=descendantOf=influenzaA;length.HA>=1600",
+      "scope": ["h5n1", "h3n2", "h1n1pdm"]
+    },
+    {
+      "name": "each OR branch scopes independently",
+      "input": "organism==sars2;nuc.23403=='G',organism==h5n1;nuc.HA.1234=='A'",
+      "organism": null,
+      "strict": "organism=='sars2';nuc.wuhan1.23403=='G',organism=='h5n1';nuc.clade2344b.HA.1234=='A'",
+      "minimal": "organism==sars2;nuc.23403==G,organism==h5n1;nuc.HA.1234==A",
+      "readable": "organism==sars2;nuc.23403==G,organism==h5n1;nuc.HA.1234==A",
+      "scope": ["h5n1", "sars2"]
+    },
+    {
+      "name": "an unscoped genome field is rejected, not guessed",
+      "input": "nuc.23403=='G'",
+      "organism": null,
+      "error": {
+        "phase": "resolve",
+        "message": "'nuc' does not mean the same thing for h5n1 and sars2",
+        "start": 0,
+        "end": 3
+      }
+    },
+    {
+      "name": "a required slot is never inferred",
+      "input": "nuc.1234=='A'",
+      "organism": "h5n1",
+      "error": { "phase": "resolve", "message": "'nuc' needs a seg for h5n1", "start": 0, "end": 8 }
+    },
+    {
+      "name": "a taxon group needs descendantOf",
+      "input": "organism==influenzaA",
+      "organism": null,
+      "error": {
+        "phase": "resolve",
+        "message": "'influenzaA' is a group, not a single organism",
+        "start": 10,
+        "end": 20
+      }
+    },
+    {
+      "name": "comparator aliases are erased by canonicalisation",
+      "input": "length.HA<=1700",
+      "organism": "h3n2",
+      "strict": "organism=='h3n2';length.HA=le='1700'",
+      "minimal": "length.HA=le=1700",
+      "readable": "length.HA<=1700",
+      "scope": ["h3n2"]
+    },
+    {
+      "name": "whitespace is tolerated on input and erased",
+      "input": "host == 'duck' ; country == 'France'",
+      "organism": null,
+      "strict": "host=='duck';country=='France'",
+      "minimal": "host==duck;country==France",
+      "readable": "host==duck;country==France",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "AND is associative across parentheses",
+      "input": "host==duck;(country==France;version==1)",
+      "organism": null,
+      "strict": "host=='duck';country=='France';version=='1'",
+      "minimal": "host==duck;country==France;version==1",
+      "readable": "host==duck;country==France;version==1",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "an OR inside an AND keeps its parentheses",
+      "input": "host==duck;(country==France,country==Germany)",
+      "organism": null,
+      "strict": "host=='duck';(country=='France',country=='Germany')",
+      "minimal": "host==duck;(country==France,country==Germany)",
+      "readable": "host==duck;(country==France,country==Germany)",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "maybe wraps a subtree",
+      "input": "maybe(collectionDate=ge=2021-03-15)",
+      "organism": null,
+      "strict": "maybe(collectionDate=ge='2021-03-15')",
+      "minimal": "maybe(collectionDate=ge=2021-03-15)",
+      "readable": "maybe(collectionDate>=2021-03-15)",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "negation inside maybe is not the same as outside",
+      "input": "maybe(!collectionDate=ge=2021-03-15)",
+      "organism": null,
+      "strict": "maybe(!collectionDate=ge='2021-03-15')",
+      "minimal": "maybe(!collectionDate=ge=2021-03-15)",
+      "readable": "maybe(!collectionDate>=2021-03-15)",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "value lists",
+      "input": "country=in=(Switzerland,France)",
+      "organism": null,
+      "strict": "country=in=('Switzerland','France')",
+      "minimal": "country=in=(Switzerland,France)",
+      "readable": "country=in=(Switzerland,France)",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "hierarchy aliases resolve to canonical ids",
+      "input": "pangoLineage=descendantOf=BA",
+      "organism": "sars2",
+      "strict": "organism=='sars2';pangoLineage=descendantOf='B.1.1.529'",
+      "minimal": "pangoLineage=descendantOf=B.1.1.529",
+      "readable": "pangoLineage=descendantOf=B.1.1.529",
+      "scope": ["sars2"]
+    },
+    {
+      "name": "the reserved value ref stays unquoted",
+      "input": "nuc.23403!=ref",
+      "organism": "sars2",
+      "strict": "organism=='sars2';nuc.wuhan1.23403!=ref",
+      "minimal": "nuc.23403!=ref",
+      "readable": "nuc.23403!=ref",
+      "scope": ["sars2"]
+    },
+    {
+      "name": "insertions are their own family",
+      "input": "nuc_ins.22204=='GAGCCAGAA'",
+      "organism": "sars2",
+      "strict": "organism=='sars2';nuc_ins.wuhan1.22204=='GAGCCAGAA'",
+      "minimal": "nuc_ins.22204==GAGCCAGAA",
+      "readable": "nuc_ins.22204==GAGCCAGAA",
+      "scope": ["sars2"]
+    },
+    {
+      "name": "amino acid insertions mirror aa",
+      "input": "aa_ins.S.214=='EPE'",
+      "organism": "sars2",
+      "strict": "organism=='sars2';aa_ins.wuhan1.S.214=='EPE'",
+      "minimal": "aa_ins.S.214==EPE",
+      "readable": "aa_ins.S.214==EPE",
+      "scope": ["sars2"]
+    },
+    {
+      "name": "keyword slots are accepted",
+      "input": "nuc(ref=clade23,seg=HA,pos=1234)=='A'",
+      "organism": "h5n1",
+      "strict": "organism=='h5n1';nuc.clade23.HA.1234=='A'",
+      "minimal": "nuc.clade23.HA.1234==A",
+      "readable": "nuc.clade23.HA.1234==A",
+      "scope": ["h5n1"]
+    },
+    {
+      "name": "isNull selects on missing data",
+      "input": "collectionDate=isNull=true",
+      "organism": null,
+      "strict": "collectionDate=isNull='true'",
+      "minimal": "collectionDate=isNull=true",
+      "readable": "collectionDate=isNull=true",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "quoted values keep characters the bare form cannot carry",
+      "input": "submitter=='Müller, A.; Lee, B.'",
+      "organism": null,
+      "strict": "submitter=='Müller, A.; Lee, B.'",
+      "minimal": "submitter=='Müller, A.; Lee, B.'",
+      "readable": "submitter=='Müller, A.; Lee, B.'",
+      "scope": ["h5n1", "h3n2", "h1n1pdm", "sars2", "rsvA", "rsvB"]
+    },
+    {
+      "name": "braces are rejected with the reason",
+      "input": "length{seg=HA}=ge=1600",
+      "organism": "h5n1",
+      "error": { "phase": "lex", "message": "'{' is not allowed here", "start": 6, "end": 7 }
+    },
+    {
+      "name": "an unterminated quote is reported at the quote",
+      "input": "country=='France",
+      "organism": null,
+      "error": { "phase": "lex", "message": "unterminated quoted value", "start": 9, "end": 16 }
+    },
+    {
+      "name": "a missing comparator is a parse error",
+      "input": "country",
+      "organism": null,
+      "error": { "phase": "parse", "message": "expected a comparator, found end of query", "start": 7, "end": 7 }
+    },
+    {
+      "name": "an operator that does not apply to the type",
+      "input": "country=ge=France",
+      "organism": null,
+      "error": {
+        "phase": "resolve",
+        "message": "=ge= does not apply to enum field 'country'",
+        "start": 7,
+        "end": 11
+      }
+    },
+    {
+      "name": "a typo in an enum value suggests the intended one",
+      "input": "country==Frnace",
+      "organism": null,
+      "error": { "phase": "resolve", "message": "'Frnace' is not a known country", "start": 9, "end": 15 }
+    },
+    {
+      "name": "organism filters that cannot hold together",
+      "input": "organism==sars2;organism==h5n1",
+      "organism": null,
+      "error": {
+        "phase": "resolve",
+        "message": "these organism filters cannot be satisfied together",
+        "start": 0,
+        "end": 30
+      }
+    }
+  ]
+}
