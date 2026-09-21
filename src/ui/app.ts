@@ -10,6 +10,7 @@ import {
 } from '../lang/schema.js';
 import type { SchemaSource } from '../schema/index.js';
 import { clear, copy, h, select } from './dom.js';
+import { buildQueryString } from './url.js';
 import {
   type EditNode,
   emptyGroup,
@@ -97,12 +98,15 @@ export class App {
   }
 
   private persist(): void {
+    // Serialised by hand, not via URLSearchParams.toString(): form-urlencoding
+    // would escape `=` and `,` and make the permalink unreadable (§4).
     const params = new URLSearchParams(window.location.search);
-    if (this.text) params.set('q', this.text);
-    else params.delete('q');
-    if (this.pinned) params.set('organism', this.pinned);
-    else params.delete('organism');
-    const query = params.toString();
+    const entries: Array<readonly [string, string | null]> = [
+      ['schema', params.get('schema')],
+      ['organism', this.pinned],
+      ['q', this.text],
+    ];
+    const query = buildQueryString(entries);
     window.history.replaceState(null, '', query ? `?${query}` : window.location.pathname);
   }
 

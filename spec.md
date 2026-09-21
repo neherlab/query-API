@@ -66,6 +66,14 @@ Queries must survive in a URL unencoded. RFC 3986 permits, in the query componen
   splits.
 - **Known risk**: `;` is AND; some legacy form-decoders treat it as a parameter separator.
   WHATWG-conformant ones do not. Accepted.
+- **Unavoidably escaped**: `'`. The WHATWG special-query percent-encode set adds `'` on top of
+  RFC 3986, so browsers rewrite it to `%27` in `http(s)` URLs no matter what the app emits. Quoted
+  values are therefore never fully literal in an address bar. Accepted: the alternative quote
+  characters are less readable, and the escape is confined to quoted values.
+
+A permalink must be serialised with a query-component encoder, not with
+`application/x-www-form-urlencoded` (`URLSearchParams.toString()`), which escapes everything outside
+`[A-Za-z0-9*_.-]` and so destroys the whole point of this section.
 
 Values outside the bare-token set are single-quoted (§5.4).
 
