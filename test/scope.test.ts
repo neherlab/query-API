@@ -153,8 +153,8 @@ describe('slot resolution (§8.2)', () => {
               family: 'nuc',
               type: 'sequenceState',
               slots: [
-                { name: 'ref', kind: 'ref', values: ['HA', 'other'] },
                 { name: 'seg', kind: 'seg', values: ['HA', 'NA'] },
+                { name: 'ref', kind: 'ref', values: ['HA', 'other'] },
                 { name: 'pos', kind: 'pos' },
               ],
             },
@@ -181,8 +181,8 @@ describe('slot resolution (§8.2)', () => {
               family: 'nuc',
               type: 'sequenceState',
               slots: [
-                { name: 'ref', kind: 'ref', values: ['HA', 'other'] },
                 { name: 'seg', kind: 'seg', values: ['HA', 'NA'] },
+                { name: 'ref', kind: 'ref', values: ['HA', 'other'] },
                 { name: 'pos', kind: 'pos' },
               ],
             },

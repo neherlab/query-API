@@ -250,10 +250,14 @@ A selector is a family plus a **named slot map**; dotted positional form is a re
 |---|---|---|---|
 | Core / metadata | `country` | — | The zero-slot case |
 | Segment-scoped | `length.<seg>` | segment | Omitted for non-segmented organisms |
-| Nucleotide | `nuc.<ref>.<seg>.<pos>` | reference, segment, position | 1-based, alignment coordinates of `<ref>` |
-| Amino acid | `aa.<ref>.<cds>.<pos>` | reference, CDS, position | CDS implies the segment |
-| Nucleotide insertion | `nuc_ins.<ref>.<seg>.<pos>` | reference, segment, position | Value is the inserted sequence (§10.2) |
-| Amino acid insertion | `aa_ins.<ref>.<cds>.<pos>` | reference, CDS, position | Mirrors `aa` |
+| Nucleotide | `nuc.<seg>.<ref>.<pos>` | segment, reference, position | 1-based, alignment coordinates of `<ref>` |
+| Amino acid | `aa.<cds>.<ref>.<pos>` | CDS, reference, position | CDS implies the segment |
+| Nucleotide insertion | `nuc_ins.<seg>.<ref>.<pos>` | segment, reference, position | Value is the inserted sequence (§10.2) |
+| Amino acid insertion | `aa_ins.<cds>.<ref>.<pos>` | CDS, reference, position | Mirrors `aa` |
+
+Slots run from the coarsest unit to the finest: segment or CDS names a homology relationship shared
+across organisms, the reference fixes a coordinate system within it, and the position is a point in
+those coordinates. This is the order of the database hierarchy.
 
 ### 8.2 Resolution
 
@@ -268,7 +272,7 @@ Resolution assigns them to slots, right to left:
 4. If a qualifier is ambiguous — it names both a reference and a segment, or two slots remain for one
    qualifier — resolution **fails**. It never guesses; the UI offers the keyword form.
 
-Keyword form `nuc(ref=X,seg=HA,pos=3423)` needs no schema to disambiguate.
+Keyword form `nuc(seg=HA,ref=X,pos=3423)` needs no schema to disambiguate.
 
 ### 8.3 Slot extensibility
 
@@ -475,6 +479,7 @@ What may change without invalidating existing query strings:
 | Add an operator, or apply an existing one to another type | Yes — parser is operator-agnostic |
 | Add a value to an enum or a node to a hierarchy | Yes |
 | Add a qualifier slot **with a declared default** | Yes (§8.3) |
+| Reorder a family's slots | No — positional strings filling two or more slots change meaning |
 | Add a derived field (§10.3) | Yes |
 | Add an organism | Yes for pinned queries; **may invalidate a cross-organism query** (§7.3) |
 | Add a type | No — language version bump |

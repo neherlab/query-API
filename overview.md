@@ -18,7 +18,7 @@ The database contains sequences from different viral species and the genome of s
 
 
 ### Nucleotide and amino acid queries
-To filter by state of specific nucleotide or amino acid, we need to specifiy the position in alignment coordinates defined by a reference sequence, and where applicable the segment or the CDS. Again, this could be achieved by `nuc{ref=<ref1>,seg=<seg1>,pos=3423}=='A'`. The downside is that this ends up being quite verbose. But if we want the user to be able to omit specify ref and seq when there is only a single reference and/or segment, contractions of `nuc.ref.seg.pos=A` become ambiguous (but should be resolved when the organism is specified).
+To filter by state of specific nucleotide or amino acid, we need to specifiy the position in alignment coordinates defined by a reference sequence, and where applicable the segment or the CDS. Again, this could be achieved by `nuc{seg=<seg1>,ref=<ref1>,pos=3423}=='A'`. The downside is that this ends up being quite verbose. But if we want the user to be able to omit specify ref and seq when there is only a single reference and/or segment, contractions of `nuc.seg.ref.pos=A` become ambiguous (but should be resolved when the organism is specified).
 
 
 

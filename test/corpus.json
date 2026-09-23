@@ -16,7 +16,7 @@
       "name": "organism pinned in the string",
       "input": "organism==h5n1;nuc.HA.1234=='A'",
       "organism": null,
-      "strict": "organism=='h5n1';nuc.clade2344b.HA.1234=='A'",
+      "strict": "organism=='h5n1';nuc.HA.clade2344b.1234=='A'",
       "minimal": "organism==h5n1;nuc.HA.1234==A",
       "readable": "organism==h5n1;nuc.HA.1234==A",
       "scope": ["h5n1"]
@@ -25,7 +25,7 @@
       "name": "organism pinned by context, strict makes it explicit",
       "input": "nuc.HA.1234=='A'",
       "organism": "h5n1",
-      "strict": "organism=='h5n1';nuc.clade2344b.HA.1234=='A'",
+      "strict": "organism=='h5n1';nuc.HA.clade2344b.1234=='A'",
       "minimal": "nuc.HA.1234==A",
       "readable": "nuc.HA.1234==A",
       "scope": ["h5n1"]
@@ -34,7 +34,7 @@
       "name": "conjunct order is irrelevant to scope",
       "input": "nuc.HA.1234=='A';organism==h5n1",
       "organism": null,
-      "strict": "nuc.clade2344b.HA.1234=='A';organism=='h5n1'",
+      "strict": "nuc.HA.clade2344b.1234=='A';organism=='h5n1'",
       "minimal": "nuc.HA.1234==A;organism==h5n1",
       "readable": "nuc.HA.1234==A;organism==h5n1",
       "scope": ["h5n1"]
@@ -52,7 +52,7 @@
       "name": "each OR branch scopes independently",
       "input": "organism==sars2;nuc.23403=='G',organism==h5n1;nuc.HA.1234=='A'",
       "organism": null,
-      "strict": "organism=='sars2';nuc.wuhan1.23403=='G',organism=='h5n1';nuc.clade2344b.HA.1234=='A'",
+      "strict": "organism=='sars2';nuc.wuhan1.23403=='G',organism=='h5n1';nuc.HA.clade2344b.1234=='A'",
       "minimal": "organism==sars2;nuc.23403==G,organism==h5n1;nuc.HA.1234==A",
       "readable": "organism==sars2;nuc.23403==G,organism==h5n1;nuc.HA.1234==A",
       "scope": ["h5n1", "sars2"]
@@ -179,7 +179,7 @@
       "name": "amino acid insertions mirror aa",
       "input": "aa_ins.S.214=='EPE'",
       "organism": "sars2",
-      "strict": "organism=='sars2';aa_ins.wuhan1.S.214=='EPE'",
+      "strict": "organism=='sars2';aa_ins.S.wuhan1.214=='EPE'",
       "minimal": "aa_ins.S.214==EPE",
       "readable": "aa_ins.S.214==EPE",
       "scope": ["sars2"]
@@ -188,9 +188,9 @@
       "name": "keyword slots are accepted",
       "input": "nuc(ref=clade23,seg=HA,pos=1234)=='A'",
       "organism": "h5n1",
-      "strict": "organism=='h5n1';nuc.clade23.HA.1234=='A'",
-      "minimal": "nuc.clade23.HA.1234==A",
-      "readable": "nuc.clade23.HA.1234==A",
+      "strict": "organism=='h5n1';nuc.HA.clade23.1234=='A'",
+      "minimal": "nuc.HA.clade23.1234==A",
+      "readable": "nuc.HA.clade23.1234==A",
       "scope": ["h5n1"]
     },
     {

@@ -148,7 +148,7 @@ describe('inapplicable is not missing (§9.1)', () => {
     const query = "organism==sars2;nuc.23403=='G',organism==h5n1;nuc.HA.1234=='A'";
     expect(truth(query, sars2Record)).toBe('true');
 
-    const h5Record: TestRecord = { organism: 'h5n1', values: { 'nuc.clade2344b.HA.1234': 'A' } };
+    const h5Record: TestRecord = { organism: 'h5n1', values: { 'nuc.HA.clade2344b.1234': 'A' } };
     expect(truth(query, h5Record)).toBe('true');
 
     const otherRecord: TestRecord = { organism: 'rsvA', values: {} };
