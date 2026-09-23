@@ -65,6 +65,7 @@ h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color
 /* Organism context sits with the scope strip it drives, above the filters it governs. */
 .context { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
 .context label { color: var(--muted); font-size: 0.8rem; }
+.context-note { color: var(--muted); font-size: 0.75rem; }
 
 /* ------------------------------- layout ------------------------------- */
 

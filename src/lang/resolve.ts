@@ -7,7 +7,7 @@ import {
   canonicalTaxon,
   coreField,
   type FieldDef,
-  leavesUnder,
+  narrowByOrganism,
   organismField,
   organismIds,
   type Schema,
@@ -19,8 +19,6 @@ import {
 
 export interface ResolveOptions {
   schema: Schema;
-  /** Organism the app is pinned to; null or undefined means "every organism in the instance". */
-  pinned?: string | null;
 }
 
 export interface ResolveResult {
@@ -37,7 +35,8 @@ const NUM_RE = /^-?\d+(\.\d+)?$/;
 
 export function resolveQuery(ast: UNode | null, opts: ResolveOptions): ResolveResult {
   const { schema } = opts;
-  const rootScope = opts.pinned ? [opts.pinned] : organismIds(schema);
+  // Scope is carried by the query and nothing else: at the root, every organism in the instance.
+  const rootScope = organismIds(schema);
   if (!ast) return { node: null, scope: rootScope, diagnostics: [] };
 
   const diagnostics: Diagnostic[] = [];
@@ -65,33 +64,13 @@ function error(ctx: Ctx, message: string, span: Span, hint?: string): null {
  * whatever the order, and negation does not participate.
  */
 function narrowScope(scope: string[], operands: UNode[], schema: Schema): string[] {
-  let out = scope;
-  for (const operand of operands) {
-    if (operand.kind !== 'cmp' || operand.selector.family !== 'organism') continue;
-    const values = operand.values.map((v) => v.text);
-    switch (operand.op) {
-      case 'eq':
-        out = out.filter((id) => id === values[0]);
-        break;
-      case 'ne':
-        out = out.filter((id) => id !== values[0]);
-        break;
-      case 'in':
-        out = out.filter((id) => values.includes(id));
-        break;
-      case 'out':
-        out = out.filter((id) => !values.includes(id));
-        break;
-      case 'descendantOf': {
-        const under = new Set(values.flatMap((v) => leavesUnder(schema.organismTaxonomy, v)));
-        out = out.filter((id) => under.has(id));
-        break;
-      }
-      default:
-        break; // isNull and friends narrow nothing
-    }
-  }
-  return out;
+  const constraints = operands
+    .filter((o) => o.kind === 'cmp' && o.selector.family === 'organism')
+    .map((o) => {
+      const cmp = o as UNode & { kind: 'cmp' };
+      return { op: cmp.op, values: cmp.values.map((v) => v.text) };
+    });
+  return narrowByOrganism(scope, constraints, schema.organismTaxonomy);
 }
 
 /** The organism set the query as a whole can match; unions across OR, opaque through NOT. */

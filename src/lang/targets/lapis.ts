@@ -1,5 +1,6 @@
 import type { RNode } from '../ast.js';
 import { type Disjunct, fieldKey, type Term, termKey, toDnf } from '../dnf.js';
+import { narrowByOrganism, type OrganismConstraint, type Schema } from '../schema.js';
 
 /**
  * LAPIS adapter (spec §11.2). A target, not the definition of anything: it declares what it cannot
@@ -9,6 +10,9 @@ import { type Disjunct, fieldKey, type Term, termKey, toDnf } from '../dnf.js';
  * `<field>From`/`<field>To` for ranges, mutation arrays, and a variant query for boolean structure
  * over mutations. Spec §15.2 is still open: verify these against a live instance before trusting
  * the bodies. The classification does not depend on the names being right.
+ *
+ * LAPIS selects the organism per request, so `organism` terms are never filters here: each plan's
+ * own organism terms decide which requests it fans out to (§11.2).
  */
 
 export type LapisClass = 'A' | 'B' | 'C' | 'D' | 'E';
@@ -35,7 +39,7 @@ interface Plan {
 
 const MUTATION_FAMILIES = new Set(['nuc', 'aa', 'nuc_ins', 'aa_ins']);
 
-export function toLapis(node: RNode | null, scope: string[]): LapisTranslation {
+export function toLapis(node: RNode | null, scope: string[], schema: Schema): LapisTranslation {
   const organisms = scope.length > 0 ? scope : ['*'];
 
   if (!node) {
@@ -73,8 +77,10 @@ export function toLapis(node: RNode | null, scope: string[]): LapisTranslation {
   }
 
   const requests: LapisRequest[] = [];
-  for (const organism of organisms) {
-    for (const plan of plans) requests.push({ organism, body: buildBody(plan, warnings) });
+  for (const plan of plans) {
+    for (const organism of planOrganisms(plan, organisms, schema, warnings)) {
+      requests.push({ organism, body: buildBody(plan, warnings) });
+    }
   }
 
   const blocked = warnings.some((w) => w.startsWith('cannot express'));
@@ -82,7 +88,7 @@ export function toLapis(node: RNode | null, scope: string[]): LapisTranslation {
     klass: blocked ? 'E' : klass,
     summary: blocked
       ? 'Class E — well-formed, but this backend cannot express every filter.'
-      : summarize(klass, plans.length, organisms.length),
+      : summarize(klass, requests.length, plans.length, organisms.length),
     requests: blocked ? [] : requests,
     warnings: dedupe(warnings),
     unsupported: blocked,
@@ -158,21 +164,42 @@ function mergeSingleField(metadata: Term[][]): Term[] | null {
   });
 }
 
-function summarize(klass: LapisClass, plans: number, organisms: number): string {
-  const fan = organisms > 1 ? ` × ${organisms} organisms` : '';
-  const total = plans * organisms;
+function summarize(klass: LapisClass, requests: number, plans: number, organisms: number): string {
+  const count = requests === 1 ? 'one request' : `${requests} requests`;
+  const fan = organisms > 1 ? ` across ${organisms} organisms` : '';
   switch (klass) {
     case 'A':
-      return `Class A — one request${fan}.`;
+      return `Class A — ${count}${fan}.`;
     case 'B':
-      return `Class B — one request${fan}; the OR collapsed into a value list.`;
+      return `Class B — ${count}${fan}; the OR collapsed into a value list.`;
     case 'C':
-      return `Class C — one request${fan}; mutation logic goes in the variant query.`;
+      return `Class C — ${count}${fan}; mutation logic goes in the variant query.`;
     case 'D':
-      return `Class D — ${total} requests (${plans} disjuncts${fan}). Correct for accession lists after de-duplication, WRONG for counts.`;
+      return `Class D — ${count} (${plans} disjuncts${fan}). Correct for accession lists after de-duplication, WRONG for counts.`;
     default:
       return 'Class E — not expressible.';
   }
+}
+
+/**
+ * The organisms a plan's requests go to: the query's scope, narrowed by the plan's own organism
+ * terms. A negated or `maybe` organism term has no reading as a request selector — the request
+ * either goes to an organism or it does not — so it is reported rather than approximated.
+ */
+function planOrganisms(plan: Plan, organisms: string[], schema: Schema, warnings: string[]): string[] {
+  // The unresolved case, where there is no scope to narrow.
+  if (organisms.length === 1 && organisms[0] === '*') return organisms;
+
+  const constraints: OrganismConstraint[] = [];
+  for (const term of plan.metadata) {
+    if (term.cmp.family !== 'organism') continue;
+    if (term.negated || term.maybe) {
+      warnings.push(`cannot express ${term.negated ? 'a negated' : 'a maybe()'} organism filter`);
+      continue;
+    }
+    constraints.push({ op: term.cmp.op, values: term.cmp.values.map(String) });
+  }
+  return narrowByOrganism(organisms, constraints, schema.organismTaxonomy);
 }
 
 /* -------------------------------- request body -------------------------------- */
@@ -182,6 +209,8 @@ function buildBody(plan: Plan, warnings: string[]): Record<string, unknown> {
 
   for (const term of plan.metadata) {
     const { cmp, negated, maybe } = term;
+    // Consumed by the request's organism selector, not a filter (see planOrganisms).
+    if (cmp.family === 'organism') continue;
     if (negated) {
       warnings.push(`cannot express a negated filter on '${cmp.family}'`);
       continue;

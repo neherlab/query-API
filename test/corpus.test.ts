@@ -6,7 +6,6 @@ import corpus from './corpus.json';
 interface Case {
   name: string;
   input: string;
-  organism: string | null;
   strict?: string;
   minimal?: string;
   readable?: string;
@@ -19,7 +18,7 @@ const cases = corpus.cases as Case[];
 describe('conformance corpus', () => {
   for (const entry of cases) {
     it(entry.name, () => {
-      const result = compile(entry.input, { schema: demoSchema, pinned: entry.organism });
+      const result = compile(entry.input, { schema: demoSchema });
 
       if (entry.error) {
         expect(result.ok).toBe(false);
@@ -44,7 +43,7 @@ describe('conformance corpus', () => {
 describe('round-trip identity (spec §13)', () => {
   for (const entry of cases.filter((c) => !c.error)) {
     it(entry.name, () => {
-      const result = compile(entry.input, { schema: demoSchema, pinned: entry.organism });
+      const result = compile(entry.input, { schema: demoSchema });
       expect(result.roundTrip.failures).toEqual([]);
       expect(result.roundTrip.ok).toBe(true);
     });
@@ -53,21 +52,21 @@ describe('round-trip identity (spec §13)', () => {
   it('canonicalisation is idempotent for every rendering', () => {
     for (const entry of cases.filter((c) => !c.error)) {
       for (const style of ['strict', 'minimal', 'readable'] as const) {
-        const first = compile(entry.input, { schema: demoSchema, pinned: entry.organism });
-        // Strict is self-contained, so it is re-read without the app's organism context.
-        const pinned = style === 'strict' ? null : entry.organism;
-        const second = compile(first[style], { schema: demoSchema, pinned });
+        const first = compile(entry.input, { schema: demoSchema });
+        const second = compile(first[style], { schema: demoSchema });
         expect(second[style], `${entry.name} / ${style}`).toBe(first[style]);
       }
     }
   });
 
-  it('strict and minimal resolve to the same filter', () => {
+  it('every rendering carries its own scope, so all three resolve alike', () => {
     for (const entry of cases.filter((c) => !c.error)) {
-      const first = compile(entry.input, { schema: demoSchema, pinned: entry.organism });
-      const strict = compile(first.strict, { schema: demoSchema, pinned: null });
-      const minimal = compile(first.minimal, { schema: demoSchema, pinned: entry.organism });
-      expect(strict.scope, entry.name).toEqual(minimal.scope);
+      const first = compile(entry.input, { schema: demoSchema });
+      for (const style of ['strict', 'minimal', 'readable'] as const) {
+        const again = compile(first[style], { schema: demoSchema });
+        expect(again.scope, `${entry.name} / ${style}`).toEqual(first.scope);
+        expect(again.json.filter, `${entry.name} / ${style}`).toEqual(first.json.filter);
+      }
     }
   });
 });

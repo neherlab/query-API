@@ -5,8 +5,10 @@ import { demoSchema } from '../src/schema/demo.js';
 /** Executable version of spec §9. */
 
 function tree(input: string, organism: string | null = null): RNode {
-  const result = compile(input, { schema: demoSchema, pinned: organism });
-  if (!result.resolved) throw new Error(`${input}: ${result.diagnostics[0]?.message}`);
+  // An organism argument is a leading `organism==` conjunct, not a context (§7.2).
+  const query = organism ? `organism==${organism};${input}` : input;
+  const result = compile(query, { schema: demoSchema });
+  if (!result.resolved) throw new Error(`${query}: ${result.diagnostics[0]?.message}`);
   return result.resolved;
 }
 

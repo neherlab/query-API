@@ -11,7 +11,6 @@ async function boot(): Promise<void> {
   new App(container, {
     source,
     initialQuery: params.get('q') ?? '',
-    initialOrganism: params.get('organism'),
   });
 }
 

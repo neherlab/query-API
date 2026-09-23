@@ -24,12 +24,13 @@ npm run build    # static bundle in dist/
 - **Emits** the versioned JSON AST, which is the canonical output.
 - **Translates** to LAPIS where possible, and says plainly when it is not.
 - **Imports**: paste a query string and the builder populates from it.
-- **Permalinks**: the whole state lives in the URL (`?q=…&organism=…&schema=…`).
+- **Permalinks**: the whole state lives in the URL (`?q=…&schema=…`).
 
 ## Cross-organism queries
 
-`organism` is an ordinary hierarchical field, not a grammar special case. What a query may reference
-follows from its scope (spec §7.2):
+`organism` is an ordinary hierarchical field, not a grammar special case, and scope lives in the
+query rather than beside it — so every query string means the same thing wherever it is read. What a
+query may reference follows from its scope (spec §7.2):
 
 ```
 host==duck;collectionDate=ge=2024                     every organism — core fields only
@@ -39,7 +40,8 @@ nuc.23403==G                                          rejected: nuc does not res
 ```
 
 The scope indicator above the builder shows which organisms are in play and what would make an
-unavailable field available.
+unavailable field available. The organism select beside it is a shortcut for one top-level
+`organism==` filter row, not a separate setting.
 
 ## Layout
 

@@ -166,6 +166,54 @@ export function sameShape(a: FieldDef, b: FieldDef): boolean {
   return as.every((slot, i) => slot.name === bs[i]!.name && slot.kind === bs[i]!.kind);
 }
 
+/* ------------------------------ the scope rule ------------------------------ */
+
+/** One organism constraint, normalised away from whichever tree it came out of. */
+export interface OrganismConstraint {
+  op: string;
+  values: string[];
+}
+
+/**
+ * The narrowing step of the scope rule (spec §7.2): the organism constraints of a single
+ * AND-group, applied to the scope that group inherits. Operators that do not constrain
+ * membership — `isNull` and friends — narrow nothing.
+ *
+ * The one implementation of the rule. Resolution, and any target that has to decide which
+ * organisms a request covers, go through here.
+ */
+export function narrowByOrganism(
+  scope: string[],
+  constraints: OrganismConstraint[],
+  taxonomy: TaxonNode[],
+): string[] {
+  let out = scope;
+  for (const { op, values } of constraints) {
+    switch (op) {
+      case 'eq':
+        out = out.filter((id) => id === values[0]);
+        break;
+      case 'ne':
+        out = out.filter((id) => id !== values[0]);
+        break;
+      case 'in':
+        out = out.filter((id) => values.includes(id));
+        break;
+      case 'out':
+        out = out.filter((id) => !values.includes(id));
+        break;
+      case 'descendantOf': {
+        const under = new Set(values.flatMap((v) => leavesUnder(taxonomy, v)));
+        out = out.filter((id) => under.has(id));
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return out;
+}
+
 /* --------------------------- taxonomy/hierarchy --------------------------- */
 
 export function findTaxon(roots: TaxonNode[], id: string): TaxonNode | undefined {

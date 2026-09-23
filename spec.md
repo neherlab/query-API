@@ -199,11 +199,15 @@ filtering in the overview needs no dedicated syntax.
 For a node *n*, its **organism scope** `O(n)` is the set of organisms not excluded by organism
 constraints in the AND-group containing *n*, intersected with those of enclosing AND-groups:
 
-- at the root, `O` is every organism in the instance, or the one the app is pinned to;
+- at the root, `O` is every organism in the instance;
 - within an AND-group, each conjunct's scope is narrowed by every *sibling* conjunct constraining
   `organism` via `==`, `!=`, `=in=`, `=out=`, or `=descendantOf=` — so conjunct order is irrelevant;
 - each branch of an OR inherits the enclosing scope independently;
 - `!` does not affect scope. Scoping is structural; negation is semantic.
+
+Scope is carried by the query and by nothing else. There is no out-of-band organism context: an
+app that is "about" one organism says so with an ordinary `organism==` conjunct, which makes every
+query string self-contained and means the same thing wherever it is read.
 
 **Validity**: every constraint on an organism-scoped field must resolve *identically* — same slots,
 type, and meaning — for every organism in `O`. Otherwise the query is invalid and the error names the
@@ -235,8 +239,9 @@ organism filter.
 - Narrowing the taxonomy is a legitimate way to make an organism-scoped filter valid; pinning one
   organism is the special case, not the requirement.
 - **Hazard**: adding an organism can invalidate a previously valid cross-organism query, if it joins
-  a taxon subtree without a segment its siblings have. Mitigation: strict rendering pins the organism
-  set (§13), and the failure is an explicit resolution error, not a silent change in results.
+  a taxon subtree without a segment its siblings have. Mitigation: the query names the organism set
+  it was written against, and the failure is an explicit resolution error, not a silent change in
+  results.
 
 ---
 
@@ -457,8 +462,10 @@ Normalize to DNF and classify:
 | D | Otherwise | N requests, with a warning |
 | E | OR crosses the metadata/mutation boundary | No request; diagnostic |
 
-Cross-organism queries fan out across per-organism endpoints and merge on core fields — a further
-multiplier on class D.
+`organism` is never a filter in a LAPIS body: the endpoint selects the organism. Each disjunct's own
+organism terms decide which per-organism endpoints its request goes to, and the results merge on core
+fields — a further multiplier on class D. A negated or `maybe` organism term has no reading as an
+endpoint selector and is reported as inexpressible.
 
 Class D is correct for accession lists after deduplication and **wrong for aggregated counts**
 (records matching two disjuncts are double-counted). The app must never silently emit a D-class
@@ -492,12 +499,14 @@ Language version and schema version are independent and both travel in the AST.
 
 ## 13. Canonical forms
 
-**Strict** — unambiguous and self-contained: organism scope pinned, every slot filled, every value
-quoted, only precedence-required parentheses.
+**Strict** — unambiguous: every slot filled, every value quoted, only precedence-required
+parentheses.
 
-**Minimal** — shortest faithful rendering given the schema: scope terms dropped where the app's
-context supplies them, inferable slots dropped, quotes dropped where the bare-token rule allows,
-redundant parentheses dropped.
+**Minimal** — shortest faithful rendering given the schema: inferable slots dropped, quotes dropped
+where the bare-token rule allows, redundant parentheses dropped.
+
+Every style is self-contained, because organism scope is part of the query (§7.2). No rendering
+drops a term, and none has to reconstruct a context.
 
 Both are URL-safe and both erase comparator aliases (§5.5).
 
@@ -513,11 +522,8 @@ Operand order is **never** rewritten; determinism comes from source order.
 canon(parse(canon(parse(s)))) == canon(parse(s))
 ```
 
-for each rendering, and `resolve(parse(strict(q))) == resolve(parse(minimal(q)))` as ASTs — with one
-qualification. Strict pins the organism scope and minimal leaves it to the app context, so when the
-pin comes from context rather than from the user's text the two trees differ by exactly that term.
-The check therefore factors top-level organism terms out of both sides and compares the derived
-scopes separately. Strict is also re-read without the app context, since it is self-contained.
+for each rendering, and `resolve(parse(strict(q))) == resolve(parse(minimal(q)))` as ASTs, with no
+qualification: the trees and the derived scopes must match exactly.
 
 The app checks this on every render; a failure is a bug, not user error.
 
@@ -542,6 +548,10 @@ Added:
    filter would make it available.
 5. **Live check** (recommended) — run the query and show a hit count, making validation more than
    syntactic.
+6. **Organism shortcut** — the organism select writes a single top-level `organism==` conjunct and
+   holds no state of its own (§7.2). Where the query's organism constraints have no single-term
+   reading — a value list, a taxon group, a term inside a branch — the select goes read-only and the
+   filter rows own it.
 
 ### 14.2 Schema sourcing
 

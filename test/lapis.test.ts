@@ -5,7 +5,8 @@ import { demoSchema } from '../src/schema/demo.js';
 /** Spec §11.2 — the adapter's expressibility classes. */
 
 function lapis(input: string, organism: string | null = null) {
-  const result = compile(input, { schema: demoSchema, pinned: organism });
+  // The organism is part of the query now; the adapter reads the scope back out of it (§11.2).
+  const result = compile(organism ? `organism==${organism};(${input})` : input, { schema: demoSchema });
   expect(result.ok, result.diagnostics[0]?.message).toBe(true);
   return result.lapis;
 }
@@ -112,7 +113,7 @@ describe('class E — not expressible', () => {
 
 describe('the language is not constrained by the target', () => {
   it('accepts queries the adapter cannot run', () => {
-    const result = compile("country==France,nuc.23403=='G'", { schema: demoSchema, pinned: 'sars2' });
+    const result = compile("organism==sars2;(country==France,nuc.23403=='G')", { schema: demoSchema });
     expect(result.ok).toBe(true);
     expect(result.roundTrip.ok).toBe(true);
     expect(result.lapis.unsupported).toBe(true);

@@ -4,8 +4,9 @@ import { demoSchema } from '../src/schema/demo.js';
 
 /** Spec §7.2 and §8.2. */
 
+/** Scope comes from the query, so an organism "context" is just a leading conjunct (§7.2). */
 function run(input: string, organism: string | null = null) {
-  return compile(input, { schema: demoSchema, pinned: organism });
+  return compile(organism ? `organism==${organism};${input}` : input, { schema: demoSchema });
 }
 
 function segmentField(segments: string[]): FieldDef {
@@ -64,8 +65,8 @@ describe('available fields follow the scope (§7.1)', () => {
     };
     const length = scopedField(partial, 'length', ['a', 'b']);
     expect(length?.slots?.[0]!.values).toEqual(['HA']);
-    expect(compile('length.HA=ge=1000', { schema: partial, pinned: null }).ok).toBe(true);
-    expect(compile('length.NA=ge=1000', { schema: partial, pinned: null }).ok).toBe(false);
+    expect(compile('length.HA=ge=1000', { schema: partial }).ok).toBe(true);
+    expect(compile('length.NA=ge=1000', { schema: partial }).ok).toBe(false);
   });
 
   it('offers nothing organism-specific across a mixed scope', () => {
@@ -163,7 +164,7 @@ describe('slot resolution (§8.2)', () => {
       ],
       organismTaxonomy: [{ id: 'toy' }],
     };
-    const result = compile("nuc.HA.5=='A'", { schema: ambiguous, pinned: 'toy' });
+    const result = compile("nuc.HA.5=='A'", { schema: ambiguous });
     expect(result.ok).toBe(false);
     expect(result.diagnostics[0]!.message).toMatch(/ambiguous/);
     expect(result.diagnostics[0]!.hint).toMatch(/name the slots/);
@@ -191,7 +192,7 @@ describe('slot resolution (§8.2)', () => {
       ],
       organismTaxonomy: [{ id: 'toy' }],
     };
-    const result = compile("nuc(ref=HA,seg=NA,pos=5)=='A'", { schema: ambiguous, pinned: 'toy' });
+    const result = compile("nuc(ref=HA,seg=NA,pos=5)=='A'", { schema: ambiguous });
     expect(result.ok).toBe(true);
     // Positional would be ambiguous, so the renderer keeps the keyword form.
     expect(result.minimal).toContain('nuc(');

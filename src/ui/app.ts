@@ -22,6 +22,7 @@ import {
   MATCH_MODES,
   modeOf,
   nextId,
+  organismSelection,
   remove,
   toText,
   wrappersFor,
@@ -30,12 +31,10 @@ import {
 export interface AppOptions {
   source: SchemaSource;
   initialQuery: string;
-  initialOrganism: string | null;
 }
 
 export class App {
   private schema: Schema;
-  private pinned: string | null;
   private root: GroupNode = emptyGroup('and');
   private text = '';
   private result: CompileResult;
@@ -45,7 +44,6 @@ export class App {
   constructor(container: HTMLElement, private readonly options: AppOptions) {
     this.container = container;
     this.schema = options.source.schema;
-    this.pinned = options.initialOrganism;
     this.textarea = h('textarea', {
       class: 'query-input',
       spellcheck: 'false',
@@ -60,7 +58,7 @@ export class App {
       }
     });
 
-    this.result = compile('', { schema: this.schema, pinned: this.pinned });
+    this.result = compile('', { schema: this.schema });
     if (options.initialQuery) this.applyText(options.initialQuery, false);
     // Open on a filled-in filter row rather than an empty shell: an incomplete filter renders as
     // the empty string (model.ts filterText), so the query stays empty until a value is typed.
@@ -77,21 +75,21 @@ export class App {
   /** Model is the source of truth; the string is derived from it. */
   private syncFromModel(): void {
     this.text = toText(this.root, this.schema, this.scope());
-    this.result = compile(this.text, { schema: this.schema, pinned: this.pinned });
+    this.result = compile(this.text, { schema: this.schema });
     this.persist();
     this.render();
   }
 
   /** Import: a string replaces the model, but only if it resolves (spec §14.1.1). */
   private applyText(text: string, rerender = true): void {
-    const result = compile(text, { schema: this.schema, pinned: this.pinned });
+    const result = compile(text, { schema: this.schema });
     this.result = result;
     this.text = text;
     if (result.ok && result.resolved) {
       const imported = fromResolved(result.resolved);
       this.root = imported.kind === 'group' ? imported : { ...emptyGroup('and'), children: [imported] };
       this.text = result.minimal;
-      this.result = compile(this.text, { schema: this.schema, pinned: this.pinned });
+      this.result = compile(this.text, { schema: this.schema });
     }
     this.persist();
     if (rerender) this.render();
@@ -103,7 +101,6 @@ export class App {
     const params = new URLSearchParams(window.location.search);
     const entries: Array<readonly [string, string | null]> = [
       ['schema', params.get('schema')],
-      ['organism', this.pinned],
       ['q', this.text],
     ];
     const query = buildQueryString(entries);
@@ -132,21 +129,50 @@ export class App {
     );
   }
 
-  /** Sits with the scope it determines, directly above the filters it governs. */
+  /**
+   * Sits with the scope it determines, directly above the filters it governs. It is a shortcut
+   * for one `organism==` filter row, not a separate piece of state (model.ts organismSelection).
+   */
   private organismContext(): HTMLElement {
+    const { term, editable } = organismSelection(this.root);
+    const current = term?.values[0] ?? '';
     const organisms = [
       { value: '', label: 'all organisms' },
       ...this.schema.organisms.map((o) => ({ value: o.id, label: o.label })),
     ];
+    // A value the schema does not know — a typo, or a taxon group — still has to be shown.
+    if (current !== '' && !organisms.some((o) => o.value === current)) {
+      organisms.push({ value: current, label: current });
+    }
+
+    const el = select(organisms, current, (value) => this.setOrganism(value));
+    el.disabled = !editable;
     return h(
       'div',
       { class: 'context' },
-      h('label', { text: 'Organism context' }),
-      select(organisms, this.pinned ?? '', (value) => {
-        this.pinned = value === '' ? null : value;
-        this.syncFromModel();
-      }),
+      h('label', { text: 'Organism' }),
+      el,
+      !editable && h('span', { class: 'context-note', text: 'set in the query — edit it as a filter row' }),
     );
+  }
+
+  /** The select owns exactly one top-level `organism==` conjunct: it writes, rewrites, or drops it. */
+  private setOrganism(value: string): void {
+    const { term } = organismSelection(this.root);
+    if (term && value === '') remove(this.root, term.id);
+    else if (term) term.values = [value];
+    else if (value !== '') {
+      this.root.children.unshift({
+        id: nextId(),
+        kind: 'filter',
+        wrappers: [],
+        family: 'organism',
+        slots: {},
+        op: 'eq',
+        values: [value],
+      });
+    }
+    this.syncFromModel();
   }
 
   private builderPanel(): HTMLElement {

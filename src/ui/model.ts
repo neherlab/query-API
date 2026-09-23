@@ -145,6 +145,42 @@ function filterFrom(cmp: RCmp): FilterNode {
   };
 }
 
+/* --------------------------- the organism context --------------------------- */
+
+export interface OrganismSelection {
+  /** The top-level `organism==X` conjunct the select stands for, if the query has one. */
+  term: FilterNode | null;
+  /** False when the query's organism constraints have no single-term reading. */
+  editable: boolean;
+}
+
+/**
+ * Organism scope lives in the query (spec §7.2), so the select is a view over one top-level
+ * `organism==X` conjunct rather than state of its own. It can only be that view when the query
+ * has no other reading: the root must be a plain AND-group, and any organism term in it must be
+ * that one conjunct. A value list, a taxon group, or an organism term inside a branch belongs to
+ * the filter rows, and the select steps aside.
+ */
+export function organismSelection(root: GroupNode): OrganismSelection {
+  if (root.op !== 'and' || root.wrappers.length > 0) return { term: null, editable: false };
+
+  const present = organismFilters(root);
+  if (present.length === 0) return { term: null, editable: true };
+  if (present.length > 1) return { term: null, editable: false };
+
+  const term = present[0]!;
+  const topLevel = root.children.includes(term);
+  if (!topLevel || term.wrappers.length > 0 || term.op !== 'eq' || term.values.length !== 1) {
+    return { term: null, editable: false };
+  }
+  return { term, editable: true };
+}
+
+function organismFilters(node: EditNode): FilterNode[] {
+  if (node.kind === 'filter') return node.family === 'organism' ? [node] : [];
+  return node.children.flatMap(organismFilters);
+}
+
 /* ------------------------------- mutation -------------------------------- */
 
 export function findParent(root: EditNode, id: string): GroupNode | null {
