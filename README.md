@@ -40,8 +40,9 @@ nuc.23403==G                                          rejected: nuc does not res
 ```
 
 The scope indicator above the builder shows which organisms are in play and what would make an
-unavailable field available. The organism select beside it is a shortcut for one top-level
-`organism==` filter row, not a separate setting.
+unavailable field available. The organism control beside it is the one place an organism is chosen —
+it offers the taxonomy and writes a single top-level conjunct (`=descendantOf=` for a group, `==` for
+one organism), so the filter rows do not offer the field as well.
 
 ## Layout
 

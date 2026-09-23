@@ -548,10 +548,13 @@ Added:
    filter would make it available.
 5. **Live check** (recommended) — run the query and show a hit count, making validation more than
    syntactic.
-6. **Organism shortcut** — the organism select writes a single top-level `organism==` conjunct and
-   holds no state of its own (§7.2). Where the query's organism constraints have no single-term
-   reading — a value list, a taxon group, a term inside a branch — the select goes read-only and the
-   filter rows own it.
+6. **One organism control** — organism is chosen in exactly one place, above the filters, and not
+   offered as a field in the filter rows. It writes a single top-level conjunct and holds no state
+   of its own (§7.2): a taxon group as `=descendantOf=`, a single organism as `==`. It restricts an
+   OR-rooted query by wrapping it, never by joining one branch. Where the query's organism
+   constraints have no single-term reading — a value list, a negated term, a term inside a branch —
+   the control goes read-only and the filter rows own it, keeping the field available on the row
+   that already carries it.
 
 ### 14.2 Schema sourcing
 

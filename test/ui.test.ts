@@ -112,7 +112,9 @@ describe('range filters are one row with two bounds', () => {
 describe('import populates the builder (§14.1.1)', () => {
   it('rebuilds the tree from a pasted string', () => {
     const container = mount("organism==sars2;nuc.23403=='G'");
-    expect(container.querySelectorAll('.filter')).toHaveLength(2);
+    // The organism goes to the control above the builder, the rest to filter rows.
+    expect(organismSelect(container).value).toBe('sars2');
+    expect(container.querySelectorAll('.filter')).toHaveLength(1);
     expect(chips(container)).toEqual(['sars2']);
     expect(container.querySelector('.string-value')?.textContent).toBe('organism==sars2;nuc.23403==G');
   });
@@ -184,11 +186,68 @@ describe('the organism select is a view over one query term (§7.2)', () => {
     expect(organismSelect(container).disabled).toBe(false);
   });
 
+  it('offers taxon groups, and writes them as descendantOf', () => {
+    const container = mount('host==duck');
+    choose(organismSelect(container), 'influenzaA');
+    expect(minimal()).toBe('organism=descendantOf=influenzaA;host==duck');
+    expect(chips(document.body)).toEqual(['h5n1', 'h3n2', 'h1n1pdm']);
+
+    // Switching from a group to one organism rewrites the operator with it.
+    choose(organismSelect(document.body), 'h5n1');
+    expect(minimal()).toBe('organism==h5n1;host==duck');
+  });
+
+  it('leaves out a group that covers the whole instance, which is what "all organisms" means', () => {
+    const container = mount();
+    const values = [...organismSelect(container).options].map((o) => o.value);
+    expect(values).not.toContain('viruses');
+    expect(values).toEqual(['', 'influenzaA', 'h5n1', 'h3n2', 'h1n1pdm', 'sars2', 'rsv', 'rsvA', 'rsvB']);
+  });
+
+  it('is the only place an organism is chosen — filter rows do not offer the field', () => {
+    const container = mount('host==duck');
+    const families = [...container.querySelectorAll<HTMLOptionElement>('.filter .field-select option')];
+    expect(families.map((o) => o.value)).not.toContain('organism');
+  });
+
+  it('keeps the field on a row that already carries one', () => {
+    const container = mount('organism=in=(sars2,rsvA);host==human');
+    const rows = [...container.querySelectorAll<HTMLSelectElement>('.filter .field-select')];
+    expect(rows.map((el) => el.value)).toContain('organism');
+  });
+
   it('steps aside when the organism constraint has no single-term reading', () => {
     const container = mount('organism=in=(sars2,rsvA);host==human');
     expect(organismSelect(container).disabled).toBe(true);
     expect(container.querySelector('.context-note')?.textContent).toMatch(/edit it as a filter row/);
     // The filter row still carries it, so the query is untouched.
     expect(minimal()).toBe('organism=in=(sars2,rsvA);host==human');
+  });
+});
+
+describe('a query that is only an organism still has somewhere to type', () => {
+  it('opens a filter row, since the control draws the organism term itself', () => {
+    const container = mount('organism==sars2');
+    expect(organismSelect(container).value).toBe('sars2');
+    expect(container.querySelectorAll('.filter')).toHaveLength(1);
+    // The empty row contributes nothing, so the query is unchanged.
+    expect(minimal()).toBe('organism==sars2');
+  });
+});
+
+describe('the organism control covers queries it has to wrap', () => {
+  it('restricts an OR-rooted query as a whole, not one of its branches', () => {
+    const container = mount('country==France,country==Germany');
+    expect(organismSelect(container).disabled).toBe(false);
+    choose(organismSelect(container), 'sars2');
+    expect(minimal()).toBe('organism==sars2;(country==France,country==Germany)');
+    expect(chips(document.body)).toEqual(['sars2']);
+  });
+
+  it('says so plainly when the query owns the constraint', () => {
+    const container = mount('organism=in=(sars2,rsvA);host==human');
+    const el = organismSelect(container);
+    expect(el.disabled).toBe(true);
+    expect([...el.options].map((o) => o.textContent)).toEqual(['set in the query']);
   });
 });

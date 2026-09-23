@@ -148,29 +148,34 @@ function filterFrom(cmp: RCmp): FilterNode {
 /* --------------------------- the organism context --------------------------- */
 
 export interface OrganismSelection {
-  /** The top-level `organism==X` conjunct the select stands for, if the query has one. */
+  /** The top-level organism conjunct the control stands for, if the query has one. */
   term: FilterNode | null;
   /** False when the query's organism constraints have no single-term reading. */
   editable: boolean;
 }
 
+/** The two spellings the organism control can write: one organism, or everything under a group. */
+const SELECTABLE_OPS = ['eq', 'descendantOf'];
+
 /**
- * Organism scope lives in the query (spec §7.2), so the select is a view over one top-level
- * `organism==X` conjunct rather than state of its own. It can only be that view when the query
- * has no other reading: the root must be a plain AND-group, and any organism term in it must be
- * that one conjunct. A value list, a taxon group, or an organism term inside a branch belongs to
- * the filter rows, and the select steps aside.
+ * Organism scope lives in the query (spec §7.2), so the control is a view over one top-level
+ * organism conjunct rather than state of its own. It can only be that view when the query has no
+ * other reading: the root must be a plain AND-group, and any organism term in it must be that one
+ * conjunct, naming a single value. A value list, a negated term, or an organism term inside a
+ * branch belongs to the filter rows, and the control steps aside.
  */
 export function organismSelection(root: GroupNode): OrganismSelection {
-  if (root.op !== 'and' || root.wrappers.length > 0) return { term: null, editable: false };
-
   const present = organismFilters(root);
+  // With no organism term to reflect there is nothing to disagree with: the control can always
+  // write one, wrapping an OR-rooted query rather than joining one of its branches.
   if (present.length === 0) return { term: null, editable: true };
-  if (present.length > 1) return { term: null, editable: false };
+
+  const plainRoot = root.op === 'and' && root.wrappers.length === 0;
+  if (present.length > 1 || !plainRoot) return { term: null, editable: false };
 
   const term = present[0]!;
   const topLevel = root.children.includes(term);
-  if (!topLevel || term.wrappers.length > 0 || term.op !== 'eq' || term.values.length !== 1) {
+  if (!topLevel || term.wrappers.length > 0 || !SELECTABLE_OPS.includes(term.op) || term.values.length !== 1) {
     return { term: null, editable: false };
   }
   return { term, editable: true };

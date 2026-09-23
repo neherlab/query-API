@@ -5,8 +5,11 @@ import {
   coreField,
   familiesInScope,
   type FieldDef,
+  leavesUnder,
+  organismIds,
   type Schema,
   type SlotDef,
+  type TaxonNode,
 } from '../lang/schema.js';
 import type { SchemaSource } from '../schema/index.js';
 import { clear, copy, h, select } from './dom.js';
@@ -60,13 +63,26 @@ export class App {
 
     this.result = compile('', { schema: this.schema });
     if (options.initialQuery) this.applyText(options.initialQuery, false);
-    // Open on a filled-in filter row rather than an empty shell: an incomplete filter renders as
-    // the empty string (model.ts filterText), so the query stays empty until a value is typed.
-    if (this.root.children.length === 0) this.root.children.push(this.newFilter());
+    this.ensureRow();
     this.render();
   }
 
   /* --------------------------------- state --------------------------------- */
+
+  /** Root children the builder draws: everything but the term the organism control owns. */
+  private visibleChildren(): EditNode[] {
+    const owned = organismSelection(this.root).term;
+    return this.root.children.filter((child) => child !== owned);
+  }
+
+  /**
+   * Open on a filter row rather than an empty shell — an incomplete filter renders as the empty
+   * string (model.ts filterText), so the query stays as it was until a value is typed. A query of
+   * nothing but an organism term is drawn entirely by the control, so it needs one too.
+   */
+  private ensureRow(): void {
+    if (this.visibleChildren().length === 0) this.root.children.push(this.newFilter());
+  }
 
   private scope(): string[] {
     return this.result.scope.length > 0 ? this.result.scope : this.schema.organisms.map((o) => o.id);
@@ -88,6 +104,7 @@ export class App {
     if (result.ok && result.resolved) {
       const imported = fromResolved(result.resolved);
       this.root = imported.kind === 'group' ? imported : { ...emptyGroup('and'), children: [imported] };
+      this.ensureRow();
       this.text = result.minimal;
       this.result = compile(this.text, { schema: this.schema });
     }
@@ -130,47 +147,87 @@ export class App {
   }
 
   /**
-   * Sits with the scope it determines, directly above the filters it governs. It is a shortcut
-   * for one `organism==` filter row, not a separate piece of state (model.ts organismSelection).
+   * The one place an organism is chosen. It offers the organism taxonomy, so a group reads as
+   * `organism=descendantOf=<group>` and a single organism as `organism==<id>` — the two spellings
+   * that make genome fields available (§7.2). Sets that are neither, `organism=in=(...)`, stay
+   * with the filter rows.
    */
   private organismContext(): HTMLElement {
     const { term, editable } = organismSelection(this.root);
     const current = term?.values[0] ?? '';
-    const organisms = [
-      { value: '', label: 'all organisms' },
-      ...this.schema.organisms.map((o) => ({ value: o.id, label: o.label })),
-    ];
-    // A value the schema does not know — a typo, or a taxon group — still has to be shown.
-    if (current !== '' && !organisms.some((o) => o.value === current)) {
-      organisms.push({ value: current, label: current });
+    // Read-only means the query says something this control cannot: say that, rather than showing
+    // a value the query does not have.
+    const options = editable
+      ? [{ value: '', label: 'all organisms' }, ...this.organismOptions()]
+      : [{ value: '', label: 'set in the query' }];
+    // A value the schema does not know — a typo in a pasted string — still has to be shown.
+    if (editable && current !== '' && !options.some((o) => o.value === current)) {
+      options.push({ value: current, label: current });
     }
 
-    const el = select(organisms, current, (value) => this.setOrganism(value));
+    const el = select(options, editable ? current : '', (value) => this.setOrganism(value), {
+      class: 'organism-select',
+    });
     el.disabled = !editable;
     return h(
       'div',
       { class: 'context' },
       h('label', { text: 'Organism' }),
       el,
-      !editable && h('span', { class: 'context-note', text: 'set in the query — edit it as a filter row' }),
+      !editable && h('span', { class: 'context-note', text: 'edit it as a filter row below' }),
     );
   }
 
-  /** The select owns exactly one top-level `organism==` conjunct: it writes, rewrites, or drops it. */
+  /**
+   * The taxonomy, depth-indented. A node whose leaves are the whole instance is left out: that is
+   * what 'all organisms' already means, and offering it twice is what the control exists to avoid.
+   */
+  private organismOptions(): Array<{ value: string; label: string; leaf: boolean }> {
+    const total = organismIds(this.schema).length;
+    const out: Array<{ value: string; label: string; leaf: boolean }> = [];
+    const visit = (node: TaxonNode, depth: number): void => {
+      const leaf = (node.children?.length ?? 0) === 0;
+      if (leaf || leavesUnder(this.schema.organismTaxonomy, node.id).length < total) {
+        const named = this.schema.organisms.find((o) => o.id === node.id)?.label;
+        out.push({
+          value: node.id,
+          label: `${'\u00a0\u00a0'.repeat(depth)}${named ?? node.label ?? node.id}`,
+          leaf,
+        });
+        depth += 1;
+      }
+      node.children?.forEach((child) => visit(child, depth));
+    };
+    this.schema.organismTaxonomy.forEach((node) => visit(node, 0));
+    return out;
+  }
+
+  /** The control owns exactly one top-level organism conjunct: it writes, rewrites, or drops it. */
   private setOrganism(value: string): void {
     const { term } = organismSelection(this.root);
-    if (term && value === '') remove(this.root, term.id);
-    else if (term) term.values = [value];
-    else if (value !== '') {
-      this.root.children.unshift({
-        id: nextId(),
-        kind: 'filter',
-        wrappers: [],
-        family: 'organism',
-        slots: {},
-        op: 'eq',
-        values: [value],
-      });
+    if (value === '') {
+      if (term) remove(this.root, term.id);
+    } else {
+      // A group matches nothing with `==`, since records carry leaves (§10.1).
+      const op = this.organismOptions().find((o) => o.value === value)?.leaf ? 'eq' : 'descendantOf';
+      if (term) {
+        term.op = op;
+        term.values = [value];
+      } else {
+        const added: FilterNode = {
+          id: nextId(),
+          kind: 'filter',
+          wrappers: [],
+          family: 'organism',
+          slots: {},
+          op,
+          values: [value],
+        };
+        // Restricting an OR-rooted query means restricting all of it, so wrap rather than join one
+        // of its branches — `organism==X;(a,b)`, not `organism==X,a,b`.
+        if (this.root.op === 'and' && this.root.wrappers.length === 0) this.root.children.unshift(added);
+        else this.root = { ...emptyGroup('and'), children: [added, this.root] };
+      }
     }
     this.syncFromModel();
   }
@@ -238,7 +295,9 @@ export class App {
         h('button', { class: 'ghost danger remove', text: 'remove', onclick: () => this.removeNode(group.id) }),
     );
 
-    const children = group.children.map((child) =>
+    // The organism control above is the owned term's editor; drawing it again as a row would be
+    // the same constraint twice.
+    const children = (isRoot ? this.visibleChildren() : group.children).map((child) =>
       child.kind === 'group' ? this.groupView(child, false) : this.filterView(child),
     );
 
@@ -321,7 +380,11 @@ export class App {
   }
 
   private fieldSelect(filter: FilterNode, scope: string[]): HTMLSelectElement {
-    const available = familiesInScope(this.schema, scope);
+    // Organism is chosen by the control above the builder, so it is not on offer here; a row that
+    // already carries one — pasted in, or a set the control cannot express — keeps it.
+    const available = familiesInScope(this.schema, scope).filter(
+      (def) => def.family !== 'organism' || filter.family === 'organism',
+    );
     const core = new Set(this.schema.coreFields.map((f) => f.family));
     const el = h('select', {
       class: 'field-select',
